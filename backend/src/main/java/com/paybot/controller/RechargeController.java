@@ -1,17 +1,17 @@
 package com.paybot.controller;
 
-import com.paybot.dto.request.RechargeRequest;
-import com.paybot.dto.response.ApiResponse;
-import com.paybot.dto.response.RechargeResponse;
 import com.paybot.service.RechargeService;
-import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/recharge")
+@CrossOrigin(origins = "*")
 public class RechargeController {
 
     private final RechargeService rechargeService;
@@ -21,22 +21,68 @@ public class RechargeController {
     }
 
     @PostMapping("/mobile")
-    public ResponseEntity<ApiResponse<RechargeResponse>> mobileRecharge(
-            Authentication authentication,
-            @Valid @RequestBody RechargeRequest request) {
-        String email = authentication.getName();
-        RechargeResponse response = rechargeService.processRecharge(email, request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Mobile recharge successful", response));
+    public ResponseEntity<?> mobileRecharge(Authentication authentication, @RequestBody Map<String, Object> payload) {
+        try {
+            String email = authentication.getName();
+            
+            // Frontend se data nikalna safely
+            BigDecimal amount = new BigDecimal(payload.get("amount").toString());
+            String provider = payload.get("serviceProvider").toString();
+            String account = payload.get("accountNumber").toString();
+
+            rechargeService.processRecharge(
+                    email,
+                    "MOBILE_RECHARGE",
+                    amount,
+                    provider,
+                    account
+            );
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "success", true,
+                "message", "Mobile recharge successful",
+                "transactionRef", "REC-SUCCESS",
+                "amount", amount,
+                "accountNumber", account
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
     }
 
     @PostMapping("/dth")
-    public ResponseEntity<ApiResponse<RechargeResponse>> dthRecharge(
-            Authentication authentication,
-            @Valid @RequestBody RechargeRequest request) {
-        String email = authentication.getName();
-        RechargeResponse response = rechargeService.processRecharge(email, request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("DTH recharge successful", response));
+    public ResponseEntity<?> dthRecharge(Authentication authentication, @RequestBody Map<String, Object> payload) {
+        try {
+            String email = authentication.getName();
+            
+            // Frontend se data nikalna safely
+            BigDecimal amount = new BigDecimal(payload.get("amount").toString());
+            String provider = payload.get("serviceProvider").toString();
+            String account = payload.get("accountNumber").toString();
+
+            rechargeService.processRecharge(
+                    email,
+                    "DTH_RECHARGE",
+                    amount,
+                    provider,
+                    account
+            );
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "success", true,
+                "message", "DTH recharge successful",
+                "transactionRef", "REC-SUCCESS",
+                "amount", amount,
+                "accountNumber", account
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", e.getMessage()
+            ));
+        }
     }
 }

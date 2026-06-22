@@ -6,7 +6,6 @@ com\paybot\dto\request\RechargeRequest$RechargeRequestBuilder.class
 com\paybot\controller\BillPayController.class
 com\paybot\dto\request\WalletTopUpRequest$WalletTopUpRequestBuilder.class
 com\paybot\exception\GlobalExceptionHandler.class
-com\paybot\service\ChatbotService$1.class
 com\paybot\controller\RechargeController.class
 com\paybot\dto\request\LoginRequest$LoginRequestBuilder.class
 com\paybot\dto\response\ApiResponse.class
@@ -33,8 +32,6 @@ com\paybot\dto\response\ChatResponse$ChatResponseBuilder.class
 com\paybot\exception\ResourceNotFoundException.class
 com\paybot\dto\response\ApiResponse$ApiResponseBuilder.class
 com\paybot\exception\DuplicateResourceException.class
-com\paybot\model\Transaction$TransactionBuilder.class
-com\paybot\dto\response\TransactionResponse$TransactionResponseBuilder.class
 com\paybot\model\User.class
 com\paybot\dto\response\WalletResponse.class
 com\paybot\PaybotApplication.class

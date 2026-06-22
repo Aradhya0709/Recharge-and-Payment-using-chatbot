@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
@@ -21,14 +22,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <Routes>
-        {/* 1. SEQUENTIAL AUTHENTICATION FLOW */}
-        {/* Default route ab user ko sabse pehle REGISTER/SIGNUP par bhejega */}
-        <Route path="/" element={<Navigate to="/signup" replace />} />
+        {/* Default route ab Welcome page dikhayega */}
+        <Route path="/" element={<Landing />} /> 
         
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
 
-        {/* 2. PROTECTED ROUTE LAYER (ONLY ACCESSIBLE AFTER SUCCESSFUL LOGIN) */}
+        {/* Protected Routing (No touch area) */}
         <Route
           path="/*"
           element={
@@ -38,7 +38,6 @@ export default function App() {
                 <Sidebar />
                 <Chatbot />
 
-                {/* Main Content Render Box with Padding Layout */}
                 <div className="pt-20 md:pl-64 p-4">
                   <Routes>
                     <Route path="/dashboard" element={<Dashboard />} />
@@ -47,8 +46,6 @@ export default function App() {
                     <Route path="/recharge/dth" element={<DthRecharge />} />
                     <Route path="/bills" element={<BillPayment />} />
                     <Route path="/transactions" element={<TransactionHistory />} />
-                    
-                    {/* Fallback Internal Router inside Dashboard */}
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </div>

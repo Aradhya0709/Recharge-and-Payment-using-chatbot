@@ -6,7 +6,6 @@ import com.paybot.exception.ResourceNotFoundException;
 import com.paybot.model.Transaction;
 import com.paybot.model.User;
 import com.paybot.model.Wallet;
-import com.paybot.model.enums.TransactionType;
 import com.paybot.repository.TransactionRepository;
 import com.paybot.repository.UserRepository;
 import com.paybot.repository.WalletRepository;
@@ -14,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -40,7 +40,6 @@ public class ChatbotService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
 
-        // Determine intent and process
         if (containsAny(lowerMessage, "balance", "wallet balance", "how much", "money left", "available balance", "funds")) {
             return handleBalanceQuery(user);
         }
@@ -81,7 +80,6 @@ public class ChatbotService {
                     .build();
         }
 
-        // Default response
         return ChatResponse.builder()
                 .reply("I'm not sure I understand that. Here's what I can help you with:\n\n"
                         + "💰 **Balance** - Check your wallet balance\n"
@@ -125,7 +123,7 @@ public class ChatbotService {
         StringBuilder reply = new StringBuilder("📋 **Recent Transactions** (Last " + transactions.size() + ")\n\n");
         for (int i = 0; i < transactions.size(); i++) {
             Transaction t = transactions.get(i);
-            String sign = t.getType() == TransactionType.WALLET_TOPUP ? "+" : "-";
+            String sign = "WALLET_TOPUP".equalsIgnoreCase(t.getType()) ? "+" : "-";
             reply.append(String.format("%d. %s **%s₹%s** - %s (%s)\n",
                     i + 1,
                     getTypeEmoji(t.getType()),
@@ -143,11 +141,14 @@ public class ChatbotService {
     }
 
     private ChatResponse handleRechargeHistory(User user) {
-        List<Transaction> transactions = transactionRepository
-                .findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), TransactionType.MOBILE_RECHARGE);
-        List<Transaction> dthTransactions = transactionRepository
-                .findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), TransactionType.DTH_RECHARGE);
-        transactions.addAll(dthTransactions);
+        List<Transaction> mobileTxns = transactionRepository
+                .findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), "MOBILE_RECHARGE");
+        List<Transaction> dthTxns = transactionRepository
+                .findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), "DTH_RECHARGE");
+        
+        List<Transaction> transactions = new ArrayList<>();
+        if (mobileTxns != null) transactions.addAll(mobileTxns);
+        if (dthTxns != null) transactions.addAll(dthTxns);
 
         if (transactions.isEmpty()) {
             return ChatResponse.builder()
@@ -163,11 +164,12 @@ public class ChatbotService {
         StringBuilder reply = new StringBuilder("📱 **Recharge History** (Last " + recent.size() + ")\n\n");
         for (int i = 0; i < recent.size(); i++) {
             Transaction t = recent.get(i);
+            String typeName = t.getType() != null ? t.getType().replace("_", " ") : "RECHARGE";
             reply.append(String.format("%d. %s **₹%s** - %s → %s (%s)\n",
                     i + 1,
                     getTypeEmoji(t.getType()),
                     t.getAmount(),
-                    t.getType().name().replace("_", " "),
+                    typeName,
                     t.getAccountNumber(),
                     t.getCreatedAt().format(DATE_FORMAT)));
         }
@@ -180,10 +182,12 @@ public class ChatbotService {
     }
 
     private ChatResponse handleBillPaymentHistory(User user) {
-        List<Transaction> allBills = new java.util.ArrayList<>();
-        for (TransactionType type : List.of(TransactionType.ELECTRICITY_BILL,
-                TransactionType.WATER_BILL, TransactionType.GAS_BILL, TransactionType.INTERNET_BILL)) {
-            allBills.addAll(transactionRepository.findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), type));
+        List<Transaction> allBills = new ArrayList<>();
+        for (String type : List.of("ELECTRICITY_BILL", "WATER_BILL", "GAS_BILL", "INTERNET_BILL")) {
+            List<Transaction> bills = transactionRepository.findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), type);
+            if (bills != null) {
+                allBills.addAll(bills);
+            }
         }
 
         if (allBills.isEmpty()) {
@@ -200,11 +204,12 @@ public class ChatbotService {
         StringBuilder reply = new StringBuilder("🧾 **Bill Payment History** (Last " + recent.size() + ")\n\n");
         for (int i = 0; i < recent.size(); i++) {
             Transaction t = recent.get(i);
+            String typeName = t.getType() != null ? t.getType().replace("_", " ") : "BILL";
             reply.append(String.format("%d. %s **₹%s** - %s for account %s (%s)\n",
                     i + 1,
                     getTypeEmoji(t.getType()),
                     t.getAmount(),
-                    t.getType().name().replace("_", " "),
+                    typeName,
                     t.getAccountNumber(),
                     t.getCreatedAt().format(DATE_FORMAT)));
         }
@@ -218,7 +223,7 @@ public class ChatbotService {
 
     private ChatResponse handleWalletTopupHistory(User user) {
         List<Transaction> topups = transactionRepository
-                .findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), TransactionType.WALLET_TOPUP);
+                .findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), "WALLET_TOPUP");
 
         if (topups.isEmpty()) {
             return ChatResponse.builder()
@@ -247,30 +252,28 @@ public class ChatbotService {
     }
 
     private ChatResponse handleTotalSpent(User user) {
-        List<Transaction> allTransactions = transactionRepository
-                .findTop10ByUserIdOrderByCreatedAtDesc(user.getId());
-
-        // Get all transactions for calculation (not just top 10)
         BigDecimal totalSpent = BigDecimal.ZERO;
         BigDecimal totalDeposited = BigDecimal.ZERO;
         int debitCount = 0;
         int creditCount = 0;
 
-        // Use the repo method that returns all
         List<Transaction> all = transactionRepository.findByUserIdAndTypeOrderByCreatedAtDesc(
-                user.getId(), TransactionType.WALLET_TOPUP);
-        for (Transaction t : all) {
-            totalDeposited = totalDeposited.add(t.getAmount());
-            creditCount++;
+                user.getId(), "WALLET_TOPUP");
+        if (all != null) {
+            for (Transaction t : all) {
+                totalDeposited = totalDeposited.add(t.getAmount());
+                creditCount++;
+            }
         }
 
-        for (TransactionType type : List.of(TransactionType.MOBILE_RECHARGE, TransactionType.DTH_RECHARGE,
-                TransactionType.ELECTRICITY_BILL, TransactionType.WATER_BILL,
-                TransactionType.GAS_BILL, TransactionType.INTERNET_BILL, TransactionType.BROADBAND_RECHARGE)) {
+        for (String type : List.of("MOBILE_RECHARGE", "DTH_RECHARGE", "ELECTRICITY_BILL", 
+                "WATER_BILL", "GAS_BILL", "INTERNET_BILL", "BROADBAND_RECHARGE")) {
             List<Transaction> byType = transactionRepository.findByUserIdAndTypeOrderByCreatedAtDesc(user.getId(), type);
-            for (Transaction t : byType) {
-                totalSpent = totalSpent.add(t.getAmount());
-                debitCount++;
+            if (byType != null) {
+                for (Transaction t : byType) {
+                    totalSpent = totalSpent.add(t.getAmount());
+                    debitCount++;
+                }
             }
         }
 
@@ -309,8 +312,6 @@ public class ChatbotService {
                 .build();
     }
 
-    // ===== Helper methods =====
-
     private boolean containsAny(String message, String... keywords) {
         for (String keyword : keywords) {
             if (message.contains(keyword)) return true;
@@ -318,33 +319,39 @@ public class ChatbotService {
         return false;
     }
 
-    private String getTypeEmoji(TransactionType type) {
-        return switch (type) {
-            case WALLET_TOPUP -> "💰";
-            case MOBILE_RECHARGE -> "📱";
-            case DTH_RECHARGE -> "📺";
-            case ELECTRICITY_BILL -> "⚡";
-            case WATER_BILL -> "💧";
-            case GAS_BILL -> "🔥";
-            case INTERNET_BILL, BROADBAND_RECHARGE -> "🌐";
+    private String getTypeEmoji(String type) {
+        if (type == null) return "💸";
+        return switch (type.toUpperCase()) {
+            case "WALLET_TOPUP" -> "💰";
+            case "MOBILE_RECHARGE" -> "📱";
+            case "DTH_RECHARGE" -> "📺";
+            case "ELECTRICITY_BILL" -> "⚡";
+            case "WATER_BILL" -> "💧";
+            case "GAS_BILL" -> "🔥";
+            case "INTERNET_BILL", "BROADBAND_RECHARGE" -> "🌐";
+            default -> "💸";
         };
     }
 
     private List<TransactionResponse> mapTransactions(List<Transaction> transactions) {
+        if (transactions == null) return Collections.emptyList();
+        
         return transactions.stream()
-                .map(t -> TransactionResponse.builder()
-                        .id(t.getId())
-                        .transactionRef(t.getTransactionRef())
-                        .type(t.getType())
-                        .status(t.getStatus())
-                        .amount(t.getAmount())
-                        .serviceProvider(t.getServiceProvider())
-                        .accountNumber(t.getAccountNumber())
-                        .description(t.getDescription())
-                        .balanceBefore(t.getBalanceBefore())
-                        .balanceAfter(t.getBalanceAfter())
-                        .createdAt(t.getCreatedAt())
-                        .build())
+                .map(t -> {
+                    TransactionResponse res = new TransactionResponse();
+                    res.setId(t.getId());
+                    res.setTransactionRef(t.getTransactionRef());
+                    res.setType(t.getType());
+                    res.setStatus(t.getStatus());
+                    res.setAmount(t.getAmount());
+                    res.setServiceProvider(t.getServiceProvider());
+                    res.setAccountNumber(t.getAccountNumber());
+                    res.setDescription(t.getDescription());
+                    res.setBalanceBefore(t.getBalanceBefore());
+                    res.setBalanceAfter(t.getBalanceAfter());
+                    res.setCreatedAt(t.getCreatedAt());
+                    return res;
+                })
                 .collect(Collectors.toList());
     }
 }

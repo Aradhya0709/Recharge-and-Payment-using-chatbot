@@ -8,8 +8,6 @@ import com.paybot.exception.ResourceNotFoundException;
 import com.paybot.model.Transaction;
 import com.paybot.model.User;
 import com.paybot.model.Wallet;
-import com.paybot.model.enums.TransactionStatus;
-import com.paybot.model.enums.TransactionType;
 import com.paybot.repository.TransactionRepository;
 import com.paybot.repository.UserRepository;
 import com.paybot.repository.WalletRepository;
@@ -23,11 +21,11 @@ import java.util.UUID;
 @Service
 public class BillPayService {
 
-    private static final Set<TransactionType> VALID_BILL_TYPES = Set.of(
-            TransactionType.ELECTRICITY_BILL,
-            TransactionType.WATER_BILL,
-            TransactionType.GAS_BILL,
-            TransactionType.INTERNET_BILL
+    private static final Set<String> VALID_BILL_TYPES = Set.of(
+            "ELECTRICITY_BILL",
+            "WATER_BILL",
+            "GAS_BILL",
+            "INTERNET_BILL"
     );
 
     private final WalletRepository walletRepository;
@@ -44,8 +42,10 @@ public class BillPayService {
 
     @Transactional
     public BillPayResponse processBillPayment(String email, BillPayRequest request) {
-        if (!VALID_BILL_TYPES.contains(request.getBillType())) {
-            throw new InvalidOperationException("Invalid bill type: " + request.getBillType()
+        String billTypeInput = request.getBillType() != null ? request.getBillType().toString() : "";
+        
+        if (!VALID_BILL_TYPES.contains(billTypeInput)) {
+            throw new InvalidOperationException("Invalid bill type: " + billTypeInput
                     + ". Valid types are: ELECTRICITY_BILL, WATER_BILL, GAS_BILL, INTERNET_BILL");
         }
 
@@ -68,40 +68,44 @@ public class BillPayService {
 
         String transactionRef = generateTransactionRef();
 
-        Transaction transaction = Transaction.builder()
-                .transactionRef(transactionRef)
-                .user(user)
-                .type(request.getBillType())
-                .status(TransactionStatus.SUCCESS)
-                .amount(request.getAmount())
-                .serviceProvider(request.getServiceProvider())
-                .accountNumber(request.getAccountNumber())
-                .description(buildBillDescription(request))
-                .balanceBefore(balanceBefore)
-                .balanceAfter(balanceAfter)
-                .build();
+        // 🟢 FIX: String types direct map mapping without builder entity crash
+        Transaction transaction = new Transaction();
+        transaction.setTransactionRef(transactionRef);
+        transaction.setUser(user);
+        transaction.setType(billTypeInput);
+        transaction.setStatus("SUCCESS");
+        transaction.setAmount(request.getAmount());
+        transaction.setServiceProvider(request.getServiceProvider() != null ? request.getServiceProvider().toString() : "UNKNOWN");
+        transaction.setAccountNumber(request.getAccountNumber());
+        transaction.setDescription(buildBillDescription(request));
+        transaction.setBalanceBefore(balanceBefore);
+        transaction.setBalanceAfter(balanceAfter);
 
         transactionRepository.save(transaction);
 
+        String providerName = request.getServiceProvider() != null ? request.getServiceProvider().toString() : "UNKNOWN";
+
         return BillPayResponse.builder()
                 .transactionRef(transactionRef)
-                .status(TransactionStatus.SUCCESS.name())
+                .status("SUCCESS")
                 .amount(request.getAmount())
-                .serviceProvider(request.getServiceProvider().name())
+                .serviceProvider(providerName)
                 .accountNumber(request.getAccountNumber())
-                .billType(request.getBillType().name())
+                .billType(billTypeInput)
                 .walletBalance(balanceAfter)
                 .message("Bill payment successful for account " + request.getAccountNumber())
                 .build();
     }
 
     private String buildBillDescription(BillPayRequest request) {
-        String typeName = request.getBillType().name().replace("_", " ").toLowerCase();
+        String typeInput = request.getBillType() != null ? request.getBillType().toString() : "BILL";
+        String typeName = typeInput.replace("_", " ").toLowerCase();
+        String providerName = request.getServiceProvider() != null ? request.getServiceProvider().toString().replace("_", " ") : "UNKNOWN";
         return String.format("%s payment of ₹%s for account %s via %s",
                 capitalize(typeName),
                 request.getAmount(),
                 request.getAccountNumber(),
-                request.getServiceProvider().name().replace("_", " "));
+                providerName);
     }
 
     private String capitalize(String str) {
