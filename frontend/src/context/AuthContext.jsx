@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from "react";
-import API from "../api/axios"; // Hamara axios instance jo backend port 8082 par set hai
+import API from "../api/axios"; // Humne iska baseURL '' (empty) kar diya hai proxy ke liye
 
 const AuthContext = createContext();
 
@@ -11,8 +11,8 @@ export function AuthProvider({ children }) {
   const signup = async (signupData) => {
     setLoading(true);
     try {
-      // Backend ke @PostMapping("/signup") par direct hit maar rahe hain
-      const response = await API.post("/auth/signup", signupData);
+      // 🚨 FIX: Path ke aage "/api" lagaya taaki Vite Proxy active ho jaye
+      const response = await API.post("/api/auth/signup", signupData);
       setLoading(false);
       return { success: true, data: response.data };
     } catch (error) {
@@ -27,11 +27,9 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     setLoading(true);
     try {
-      // Backend ke @PostMapping("/login") par direct hit maar rahe hain
-      const response = await API.post("/auth/login", { email, password });
+      // 🚨 FIX: Path ke aage "/api" lagaya taaki Vite Proxy active ho jaye
+      const response = await API.post("/api/auth/login", { email, password });
       
-      // Response se JWT token aur user details extract kar rahe hain
-      // Backend AuthResponse: { token, email, fullName, message }
       const authData = response.data.data;
 
       localStorage.setItem("paybot_token", authData.token);
