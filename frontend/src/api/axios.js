@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API = axios.create({
   // 🚨 Agar backend local chal raha hai toh strict full URL do port 8082 ke sath:
-  baseURL: "http://localhost:8082/api", 
+  baseURL: 'https://recharge-and-payment-using-chatbot-production-665f.up.railway.app', 
   headers: { "Content-Type": "application/json" },
 });
 
